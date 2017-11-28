@@ -28,6 +28,22 @@
 #include "wiring_private.h"
 #include <SPI.h>
 
+class Adafruit_SSD1331;
+class SPITransactionGuard
+{
+public:
+  SPITransactionGuard(Adafruit_SSD1331& disp) : m_rDisplay(disp)
+  {
+    if(m_rDisplay.usesHwSpi()) SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE2));
+  }
+   ~SPITransactionGuard()
+   {
+     if(m_rDisplay.usesHwSpi()) SPI.endTransaction();
+   }
+private:
+  Adafruit_SSD1331& m_rDisplay;
+};
+
 /********************************** low level pin interface */
 
 inline void Adafruit_SSD1331::spiwrite(uint8_t c) {
@@ -62,33 +78,34 @@ inline void Adafruit_SSD1331::spiwrite(uint8_t c) {
 
 
 void Adafruit_SSD1331::writeCommand(uint8_t c) {
+    
     *rsportreg &= ~ rspin;
-    //digitalWrite(_rs, LOW);
-    
-    *csportreg &= ~ cspin;
-    //digitalWrite(_cs, LOW);
-    
-    //Serial.print("C ");
+
+    selectChip();
     spiwrite(c);
-    
-    *csportreg |= cspin;
-    //digitalWrite(_cs, HIGH);
+    unselectChip();
 }
 
 
 void Adafruit_SSD1331::writeData(uint8_t c) {
+    
     *rsportreg |= rspin;
-    //digitalWrite(_rs, HIGH);
-    
-    *csportreg &= ~ cspin;
-    //digitalWrite(_cs, LOW);
-    
-    //Serial.print("D ");
+
+    selectChip();
     spiwrite(c);
-    
-    *csportreg |= cspin;
-    //digitalWrite(_cs, HIGH);
+    unselectChip();
 } 
+
+void Adafruit_SSD1331::writeData(uint8_t d1, uint8_t d2){
+
+    *rsportreg |= rspin;
+
+    selectChip();
+    spiwrite(d1);
+    spiwrite(d2);
+    unselectChip();
+}
+
 
 /***********************************/
 
@@ -99,6 +116,8 @@ void Adafruit_SSD1331::goHome(void) {
 void Adafruit_SSD1331::goTo(int x, int y) {
   if ((x >= WIDTH) || (y >= HEIGHT)) return;
   
+  SPITransactionGuard spiGuard(*this);
+
   // set x and y coordinate
   writeCommand(SSD1331_CMD_SETCOLUMN);
   writeCommand(x);
@@ -123,17 +142,19 @@ uint16_t Adafruit_SSD1331::Color565(uint8_t r, uint8_t g, uint8_t b) {
 /**************************************************************************/
 /*! 
     @brief  Draws a filled rectangle using HW acceleration
+
+    This function is really useless because it only works with a huge delay!!!
 */
 /**************************************************************************/
 /*
-void Adafruit_SSD1331::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t fillcolor) 
+void Adafruit_SSD1331::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t fillcolor) 
 {
 //Serial.println("fillRect");
   // check rotation, move rect around if necessary
   switch (getRotation()) {
   case 1:
-    swap(x, y);
-    swap(w, h);
+    gfx_swap(x, y);
+    gfx_swap(w, h);
     x = WIDTH - x - 1;
     break;
   case 2:
@@ -141,8 +162,8 @@ void Adafruit_SSD1331::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
     y = HEIGHT - y - 1;
     break;
   case 3:
-    swap(x, y);
-    swap(w, h);
+    gfx_swap(x, y);
+    gfx_swap(w, h);
     y = HEIGHT - y - 1;
     break;
   }
@@ -183,12 +204,16 @@ void Adafruit_SSD1331::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
   writeCommand((uint8_t)((fillcolor << 1) & 0x3F));
  
   // Delay while the fill completes
-  delay(SSD1331_DELAYS_HWFILL); 
+  //delay(SSD1331_DELAYS_HWFILL);
+  delayMicroseconds(10);
+  //delay(1);
 }
 */
 
+//This HW-accelerated line draw somehow functions on teensy 3.6 
 void Adafruit_SSD1331::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color) {	
   // check rotation, move pixel around if necessary
+
   switch (getRotation()) {
   case 1:
     gfx_swap(x0, y0);
@@ -224,20 +249,27 @@ void Adafruit_SSD1331::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, 
   if (y1 >= TFTHEIGHT)
     y1 = TFTHEIGHT - 1;
   
-  writeCommand(SSD1331_CMD_DRAWLINE);
-  writeCommand(x0);
-  writeCommand(y0);
-  writeCommand(x1);
-  writeCommand(y1);
-  delay(SSD1331_DELAYS_HWLINE);  
-  writeCommand((uint8_t)((color >> 11) << 1));
-  writeCommand((uint8_t)((color >> 5) & 0x3F));
-  writeCommand((uint8_t)((color << 1) & 0x3F));
-  delay(SSD1331_DELAYS_HWLINE);  
+  {
+    SPITransactionGuard spiGuard(*this);
+    writeCommand(SSD1331_CMD_DRAWLINE);
+    writeCommand(x0);
+    writeCommand(y0);
+    writeCommand(x1);
+    writeCommand(y1);
+    //delay(SSD1331_DELAYS_HWLINE); 
+     //   delayMicroseconds(10);
+ 
+    writeCommand((uint8_t)((color >> 11) << 1));
+    writeCommand((uint8_t)((color >> 5) & 0x3F));
+    writeCommand((uint8_t)((color << 1) & 0x3F));
+    delayMicroseconds(1);
+    //delay(SSD1331_DELAYS_HWLINE);
+  }  
 }
 
 void Adafruit_SSD1331::drawPixel(int16_t x, int16_t y, uint16_t color)
 {
+
   if ((x < 0) || (x >= width()) || (y < 0) || (y >= height())) return;
 
   // check rotation, move pixel around if necessary
@@ -255,36 +287,52 @@ void Adafruit_SSD1331::drawPixel(int16_t x, int16_t y, uint16_t color)
     y = HEIGHT - y - 1;
     break;
   }
+    
+  {
+    SPITransactionGuard spiGuard(*this);
+    // set x and y coordinate
+    writeCommand(SSD1331_CMD_SETCOLUMN);
+    writeCommand(x);
+    writeCommand(WIDTH-1);
 
-  goTo(x, y);
-  
-  // setup for data
-  *rsportreg |= rspin;
-  *csportreg &= ~ cspin;
-  
-  spiwrite(color >> 8);    
-  spiwrite(color);
-  
-  *csportreg |= cspin;  
+    writeCommand(SSD1331_CMD_SETROW);
+    writeCommand(y);
+    writeCommand(HEIGHT-1);
+
+    writeData(color >> 8, color);
+  }
 }
 
 void Adafruit_SSD1331::pushColor(uint16_t color) {
-  // setup for data
-  *rsportreg |= rspin;
-  *csportreg &= ~ cspin;
-  
-  spiwrite(color >> 8);    
-  spiwrite(color);
-  
-  *csportreg |= cspin; 
+  SPITransactionGuard spiGuard(*this);
+  writeData(color >> 8, color);
 }
 
 
-void Adafruit_SSD1331::begin(void) {
-    // set pin directions
+void Adafruit_SSD1331::begin()
+{
+  initPins();
+  resetDevice();
+  initDevice();
+  delay(1);
+}
+
+void Adafruit_SSD1331::initPins()
+{
+      // set pin directions
     pinMode(_rs, OUTPUT);
+    pinMode(_cs, OUTPUT);
+    if(_rst)
+    {
+        pinMode(_rst, OUTPUT);
+    }
     
-    if (_sclk) {
+    if(usesHwSpi())
+    {
+        SPI.begin();
+    }
+    else
+    {
         pinMode(_sclk, OUTPUT);
         sclkportreg = portOutputRegister(digitalPinToPort(_sclk));
         sclkpin = digitalPinToBitMask(_sclk);
@@ -292,23 +340,18 @@ void Adafruit_SSD1331::begin(void) {
         pinMode(_sid, OUTPUT);
         sidportreg = portOutputRegister(digitalPinToPort(_sid));
         sidpin = digitalPinToBitMask(_sid);
-    } else {
-        // using the hardware SPI
-        SPI.begin();
-        SPI.setDataMode(SPI_MODE3);
     }
-	
     // Toggle RST low to reset; CS low so it'll listen to us
-    pinMode(_cs, OUTPUT);
-    digitalWrite(_cs, LOW);
     cspin = digitalPinToBitMask(_cs);
-    csportreg = portOutputRegister(digitalPinToPort(_cs));
-    
+    csportreg = portOutputRegister(digitalPinToPort(_cs));    
     rspin = digitalPinToBitMask(_rs);
     rsportreg = portOutputRegister(digitalPinToPort(_rs));
-    
-    if (_rst) {
-        pinMode(_rst, OUTPUT);
+}
+
+void Adafruit_SSD1331::resetDevice()
+{
+    if (_rst)
+    {
         digitalWrite(_rst, HIGH);
         delay(500);
         digitalWrite(_rst, LOW);
@@ -316,6 +359,12 @@ void Adafruit_SSD1331::begin(void) {
         digitalWrite(_rst, HIGH);
         delay(500);
     }
+}
+
+
+void Adafruit_SSD1331::initDevice(void)
+{
+	  SPITransactionGuard spiGuard(*this);
     // Initialization Sequence
     writeCommand(SSD1331_CMD_DISPLAYOFF);  	// 0xAE
     writeCommand(SSD1331_CMD_SETREMAP); 	// 0xA0
@@ -357,7 +406,7 @@ void Adafruit_SSD1331::begin(void) {
     writeCommand(0x50);
     writeCommand(SSD1331_CMD_CONTRASTC);  	// 0x83
     writeCommand(0x7D);
-    writeCommand(SSD1331_CMD_DISPLAYON);	//--turn on oled panel    
+    writeCommand(SSD1331_CMD_DISPLAYON);	//--turn on oled panel  
 }
 
 /********************************* low level pin initialization */
@@ -377,3 +426,14 @@ Adafruit_SSD1331::Adafruit_SSD1331(uint8_t cs, uint8_t rs, uint8_t rst) : Adafru
     _sclk = 0;
     _rst = rst;
 }
+
+Adafruit_SSD1331::Adafruit_SSD1331(uint8_t cs, const Adafruit_SSD1331& other) :
+  Adafruit_GFX(TFTWIDTH, TFTHEIGHT),
+  _cs(cs),
+  _rs(other._rs),
+  _rst(0),  // Because only the first device should reset
+  _sid(other._sid),
+  _sclk(other._sclk)
+{
+}
+

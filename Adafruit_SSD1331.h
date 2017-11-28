@@ -77,8 +77,9 @@ class Adafruit_SSD1331 : public virtual Adafruit_GFX {
  public:
   Adafruit_SSD1331(uint8_t CS, uint8_t RS, uint8_t SID, uint8_t SCLK, uint8_t RST);
   Adafruit_SSD1331(uint8_t CS, uint8_t RS, uint8_t RST);
+  Adafruit_SSD1331(uint8_t cs, const Adafruit_SSD1331& other);
 
-  uint16_t Color565(uint8_t r, uint8_t g, uint8_t b);
+  static uint16_t Color565(uint8_t r, uint8_t g, uint8_t b);
 
   // drawing primitives!
   void drawPixel(int16_t x, int16_t y, uint16_t color);
@@ -86,8 +87,12 @@ class Adafruit_SSD1331 : public virtual Adafruit_GFX {
   //void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t fillcolor);
   void pushColor(uint16_t c);
 
+  void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color){ drawLine(x,y,x,y+h-1,color); }
+  void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color){ drawLine(x,y,x+w-1,y,color); };
+
+
   // commands
-  void begin(void);
+  void begin();
   void goHome(void);
   void goTo(int x, int y);
 
@@ -95,8 +100,6 @@ class Adafruit_SSD1331 : public virtual Adafruit_GFX {
 
   /* low level */
 
-  void writeData(uint8_t d);
-  void writeCommand(uint8_t c);
 
   static const int16_t TFTWIDTH = 96;
   static const int16_t TFTHEIGHT = 64;
@@ -106,7 +109,18 @@ class Adafruit_SSD1331 : public virtual Adafruit_GFX {
   void setWriteDir(void);
   void write8(uint8_t d);
 
+  bool usesHwSpi() const{ return 0 == _sclk; }
+  void selectChip() {*csportreg &= ~ cspin;}
+  void unselectChip() {*csportreg |= cspin;}
+
  private:
+  void resetDevice();
+  void initPins();
+  void initDevice();
+
+  void writeData(uint8_t d);
+  void writeData(uint8_t d1, uint8_t d2);
+  void writeCommand(uint8_t c);
   void spiwrite(uint8_t);
 
   uint8_t _cs, _rs, _rst, _sid, _sclk;
