@@ -13,6 +13,9 @@
   Written by Limor Fried/Ladyada for Adafruit Industries.  
   BSD license, all text above must be included in any redistribution
  ****************************************************/
+#ifndef __ADAFRUIT_SSD1331_H
+#define __ADAFRUIT_SSD1331_H
+
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -73,11 +76,12 @@ typedef uint8_t PortMask;
 #define SSD1331_CMD_PRECHARGELEVEL 	0xBB
 #define SSD1331_CMD_VCOMH 			0xBE
 
+template<class SPIPort, class ChipSelector>
 class Adafruit_SSD1331 : public virtual Adafruit_GFX {
  public:
-  Adafruit_SSD1331(uint8_t CS, uint8_t RS, uint8_t SID, uint8_t SCLK, uint8_t RST);
-  Adafruit_SSD1331(uint8_t CS, uint8_t RS, uint8_t RST);
-  Adafruit_SSD1331(uint8_t cs, const Adafruit_SSD1331& other);
+  Adafruit_SSD1331(SPIPort& rSPIPort, ChipSelector& rChipSelector, uint8_t chipNmbr,uint8_t RS, uint8_t SID, uint8_t SCLK, uint8_t RST);
+  Adafruit_SSD1331(SPIPort& rSPIPort, ChipSelector& rChipSelector, uint8_t chipNmbr,uint8_t RS, uint8_t RST);
+  Adafruit_SSD1331(uint8_t chipNmbr, const Adafruit_SSD1331<ChipSelector>& other);
 
   static uint16_t Color565(uint8_t r, uint8_t g, uint8_t b);
 
@@ -123,7 +127,15 @@ class Adafruit_SSD1331 : public virtual Adafruit_GFX {
   void writeCommand(uint8_t c);
   void spiwrite(uint8_t);
 
-  uint8_t _cs, _rs, _rst, _sid, _sclk;
+  uint8_t _rs, _rst, _sid, _sclk;
   PortReg *csportreg, *rsportreg, *sidportreg, *sclkportreg;
   PortMask cspin, rspin, sidpin, sclkpin;
+
+  SPIPort&     m_rSPIPort;
+  ChipSelector m_rChipSelector;
 };
+
+#include "Adafruit_SSD1331.hpp"
+
+#endif // __ADAFRUIT_SSD1331_H
+

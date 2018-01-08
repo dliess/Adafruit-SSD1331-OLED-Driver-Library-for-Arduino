@@ -15,7 +15,6 @@
  ****************************************************/
 
 #include "Adafruit_GFX.h"
-#include "Adafruit_SSD1331.h"
 #include "glcdfont.c"
 
 #ifdef __AVR
@@ -28,20 +27,20 @@
 #include "wiring_private.h"
 #include <SPI.h>
 
-class Adafruit_SSD1331;
+template<class Display>
 class SPITransactionGuard
 {
 public:
-  SPITransactionGuard(Adafruit_SSD1331& disp) : m_rDisplay(disp)
+  SPITransactionGuard(Display& rDisplay) : m_rDisplay(rDisplay)
   {
-    if(m_rDisplay.usesHwSpi()) SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE2));
+    if(m_rDisplay.usesHwSpi()) m_rDisplay.spi().beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE2));
   }
    ~SPITransactionGuard()
    {
-     if(m_rDisplay.usesHwSpi()) SPI.endTransaction();
+     if(m_rDisplay.usesHwSpi()) m_rDisplay.spi().endTransaction();
    }
 private:
-  Adafruit_SSD1331& m_rDisplay;
+  Display& m_rDisplay;
 };
 
 /********************************** low level pin interface */
